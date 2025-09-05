@@ -1,0 +1,106 @@
+Nexus: https://www.youtube.com/watch?v=opJAfDOCZuI&list=PLs-PsDpuAuTeeQF7UNyFMwbhQvJT1eE5N&index=1&t=5615s&pp=iAQB
+Code Repo: https://github.com/KastroVKiran/Nexus-Demo.git
+Documentation Repo: https://github.com/KastroVKiran/Nexus-by-Kastro.git
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+22. Integration of Private GitHub Repo in Jenkins - Freestyle Job
+
+Generate PAT in GitHub
+Configure in the Jenkins ----> Credentials
+
+23. Integration of Private GitHub Repo in Jenkins - Pipeline Job
+Generate the Pipeline Syntax for GitHub stage i.e git checkout stage
+
+24. Multi Branch Pipeline
+https://github.com/KastroVKiran/Multi-Branch-Pipeline.git
+
+25. Master and Slave Architecture
+
+Step 1: Launch Master Node - t2.medium - Install and Setup Jenkins, Git, Maven, Java
+
+Step 2: Launch 2 Worker Nodes - t2.medium - Install Java, Git, Maven
+
+Step 3: Configure Workers in the Jenkins UI
+
+Step 4: Create Pipeline Job
+Repo URL: https://github.com/KastroVKiran/Hotstar-App.git
+
+Script 1:
+pipeline {
+    agent {
+        label 'slave1'
+    }
+
+    stages {
+        stage('Git Checkout') {
+            steps {
+                git 'https://github.com/KastroVKiran/Hotstar-App.git'
+            }
+        }
+        stage('Maven Compile') {
+            steps {
+                sh 'mvn compile'
+            }
+        }
+        stage('Maven Test') {
+            steps {
+                sh 'mvn test'
+            }
+        }
+        stage('Maven Package') {
+            steps {
+                sh 'mvn package'
+            }
+        }
+    }
+}
+
+Build the job and verify the job information on the specified worker node in /tmp path
+
+Step 5: Tomcat Deployment
+Launch VM - t2.micro
+Install and Setup Tomcat
+
+<role rolename="manager-gui"/>
+<role rolename="manager-script"/>
+<role rolename="manager-status"/>
+<role rolename="admin-gui"/>
+<user username="admin" password="admin123" roles="manager-gui,admin-gui,manager-script,manager-status"/>
+
+Step 6: Configure job with Tomcat Deployment Stage
+pipeline {
+    agent {
+        label 'slave2'
+    }
+
+    stages {
+        stage('Git Checkout') {
+            steps {
+                git 'https://github.com/KastroVKiran/Hotstar-App.git'
+            }
+        }
+        stage('Maven Compile') {
+            steps {
+                sh 'mvn compile'
+            }
+        }
+        stage('Maven Test') {
+            steps {
+                sh 'mvn test'
+            }
+        }
+        stage('Maven Package') {
+            steps {
+                sh 'mvn package'
+            }
+        }
+        stage('Tomcat Deployment') {
+            steps {
+                deploy adapters: [tomcat9(alternativeDeploymentContext: '', credentialsId: 'tomcat-creds', path: '', url: 'http://52.91.60.61:8080/')], contextPath: 'hotstar-app', war: '**/*.war'
+            }
+        }
+    }
+}
+
+
+RBAC
+Final Project
