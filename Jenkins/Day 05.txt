@@ -1,0 +1,219 @@
+Jenkins Final Project 
+	Jenkins + GitHub + Maven + SonarQube + Nexus + S3 + Tomcat
+
+Jenkins - CI & CD purpose
+GitHub - Source Code Repository
+Maven - Building the Code
+SonarQube - Code Quality Analysis
+Nexus - To Store the Artifacts
+S3 - To Store the Artifacts
+Tomcat - Deployment of Application
+
+Jenkins - Amazon Linux 2023 6.1 AMI, t2.medium, 30 GB
+SonarQube - Ubuntu 24.04 AMI, t2.medium, 30 GB
+Nexus - Ubuntu 24.04 AMI, t2.medium, 30 GB
+Tomcat - Amazon Linux 2023 6.1 AMI, t2.micro, 30 GB
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Jenkins Installation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+sudo dnf update -y
+sudo dnf install java-17-amazon-corretto-devel -y
+sudo wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
+sudo rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+sudo dnf install jenkins -y
+sudo systemctl daemon-reload
+sudo systemctl enable jenkins
+sudo systemctl start jenkins
+sudo systemctl status jenkins
+
+Docker Installation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Lets setup sonar server using Docker (this is the simplest way)
+$ sudo apt install docker.io
+
+#Lets give permissions to run docker
+$ sudo chmod 666 /var/run/docker.sock
+
+Configuring the Users in Tomcat
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+<role rolename="manager-gui" />
+<user username="tomcat" password="tomcat" roles="manager-gui" />
+<role rolename="admin-gui" />
+<role rolename="manager-script" />
+<user username="admin" password="admin" roles="manager-gui,admin-gui,manager-script"/>
+
+Nexus Installation
+docker run -d -p 8081:8081 --name nexus-container sonatype/nexus3
+
+SonarQube Installation
+docker run -d --name sonarqube-container -p 9000:9000 sonarqube:lts-community
+docker exec -it <ContainerID> /bin/bash
+
+Username and Password for SonarQube is "admin"
+Username for Nexus is "admin" and password will be available in "admin.password" file
+
+
+pipeline {
+    agent any
+    tools {
+        maven 'maven3'
+    }
+
+    stages {
+        stage('Git Checkout') {
+            steps {
+                git 'https://github.com/KastroVKiran/Hotstar-App.git'
+            }
+        }
+        stage('Maven Compilation') {
+            steps {
+                sh 'mvn compile'
+            }
+        }
+        stage('Maven Testing') {
+            steps {
+                sh 'mvn test'
+            }
+        }
+        stage('Maven Packaging') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+    }
+}
+
+
+
+------------------------
+pipeline {
+    agent any
+    tools {
+        maven 'maven3'
+    }
+
+    stages {
+        stage('Git Checkout') {
+            steps {
+                git 'https://github.com/KastroVKiran/Hotstar-App.git'
+            }
+        }
+        stage('Maven Compilation') {
+            steps {
+                sh 'mvn compile'
+            }
+        }
+        stage('Maven Testing') {
+            steps {
+                sh 'mvn test'
+            }
+        }
+        stage('Maven Packaging') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+        stage('S3 Artifact Upload') {
+            steps {
+                s3Upload consoleLogLevel: 'INFO', dontSetBuildResultOnFailure: false, dontWaitForConcurrentBuildCompletion: false, entries: [[bucket: 's3-bucket-hotstar-artifact', excludedFile: '', flatten: false, gzipFiles: false, keepForever: false, managedArtifacts: false, noUploadOnFailure: false, selectedRegion: 'us-east-1', showDirectlyInBrowser: false, sourceFile: '**/*.war', storageClass: 'STANDARD', uploadFromSlave: false, useServerSideEncryption: false]], pluginFailureResultConstraint: 'FAILURE', profileName: 'hotstar', userMetadata: []
+            }
+        }
+        stage('Tomcat Deployment') {
+            steps {
+                deploy adapters: [tomcat9(alternativeDeploymentContext: '', credentialsId: 'tomcat-creds', path: '', url: 'http://50.19.51.4:8080/')], contextPath: 'hotstar-app', war: '**/*.war'
+            }
+        }
+    }
+}
+
+
+---------------------------
+pipeline {
+    agent any
+    tools {
+        maven 'maven3'
+    }
+
+    stages {
+        stage('Git Checkout') {
+            steps {
+                git 'https://github.com/KastroVKiran/Hotstar-App.git'
+            }
+        }
+        stage('Maven Compilation') {
+            steps {
+                sh 'mvn compile'
+            }
+        }
+        stage('Maven Testing') {
+            steps {
+                sh 'mvn test'
+            }
+        }
+        stage('Maven Packaging') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+        stage('S3 Artifact Upload') {
+            steps {
+                s3Upload consoleLogLevel: 'INFO', dontSetBuildResultOnFailure: false, dontWaitForConcurrentBuildCompletion: false, entries: [[bucket: 's3-bucket-hotstar-artifact', excludedFile: '', flatten: false, gzipFiles: false, keepForever: false, managedArtifacts: false, noUploadOnFailure: false, selectedRegion: 'us-east-1', showDirectlyInBrowser: false, sourceFile: '**/*.war', storageClass: 'STANDARD', uploadFromSlave: false, useServerSideEncryption: false]], pluginFailureResultConstraint: 'FAILURE', profileName: 'hotstar', userMetadata: []
+            }
+        }
+        stage('Nexus Artifact Upload') {
+            steps {
+                nexusArtifactUploader artifacts: [[artifactId: 'myapp', classifier: '', file: 'target/myapp.war', type: '.war']], credentialsId: 'nexus-creds', groupId: 'in.kastro', nexusUrl: '34.224.88.37:8081', nexusVersion: 'nexus3', protocol: 'http', repository: 'hotstar', version: '8.3.3-SNAPSHOT'
+            }
+        }
+        stage('SonarQube Scanning') {
+            steps {
+                withSonarQubeEnv('sonarqube') {
+                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.7.0.1746:sonar'
+                }
+            }
+        }
+        stage('Tomcat Deployment') {
+            steps {
+                deploy adapters: [tomcat9(alternativeDeploymentContext: '', credentialsId: 'tomcat-creds', path: '', url: 'http://50.19.51.4:8080/')], contextPath: 'hotstar-app', war: '**/*.war'
+            }
+        }
+    }
+}
+
+
+
+SonarQube Stage
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+stage('SonarQube Scanning') {
+            steps {
+                withSonarQubeEnv('sonarqube') {
+                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.7.0.1746:sonar'
+                }
+            }
+        }
